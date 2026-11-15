@@ -42,7 +42,8 @@ a.dl{display:block;text-align:center;margin-top:10px;padding:12px;border-radius:
 <label for="mx">Model naskah</label><input type="text" id="mx" value="gemini-3.1-flash-lite">
 <label for="mi">Model gambar</label><input type="text" id="mi" value="gemini-2.5-flash-image">
 <label for="mt">Model suara (TTS)</label><input type="text" id="mt" value="gemini-3.1-flash-tts-preview">
-<p class="note">Nama model sering berganti dan tidak semua gratis. Kalau muncul error “model not found”, ganti namanya di sini (lihat daftar di Google AI Studio).</p>
+<p class="note">Nama model sering berganti dan tidak semua gratis. Kalau muncul error “model not found”, ganti namanya di sini, atau tekan tombol di bawah untuk melihat daftar yang tersedia.</p>
+<button class="alt" id="lm" type="button">Cek model yang tersedia untuk key ini</button><div id="ml" class="note"></div>
 </details>
 
 <div class="card">
@@ -139,12 +140,12 @@ function frame(t){
 
 function sleep(ms){return new Promise(function(r){setTimeout(r,ms)})}
 async function gem(model,body){
- for(var n=0;n<4;n++){
+ for(var n=0;n<2;n++){
   var r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(model)+':generateContent',{method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':$('key').value.trim()},body:JSON.stringify(body)});
   var j={};try{j=await r.json()}catch(e){}
   if(r.ok)return j;
   var msg=(j.error&&j.error.message)||('HTTP '+r.status);
-  if((r.status==429||r.status==503)&&n<3){setSt('Kena batas kuota/sibuk, menunggu 15 detik lalu coba lagi…');await sleep(15000);continue;}
+  if((r.status==429||r.status==503)&&n<1){setSt('Kena batas kuota/sibuk, menunggu 15 detik lalu coba lagi…');await sleep(15000);continue;}
   throw new Error(model+': '+msg.slice(0,160));
  }}
 function parts(j){return(j.candidates&&j.candidates[0]&&j.candidates[0].content&&j.candidates[0].content.parts)||[];}
@@ -191,8 +192,8 @@ async function start(){
   scenes=L.map(function(x){return{text:x.narration,prompt:x.image_prompt||x.narration,img:null,buf:null,dur:Math.min(8,Math.max(2.5,d/L.length)),start:0}});
   for(var i=0;i<scenes.length;i++){
    var sc=scenes[i],pc=5+85*i/scenes.length;
-   if(useAI){setSt('Membuat gambar '+(i+1)+'/'+scenes.length+'…',pc);try{sc.img=await genImage(sc.prompt,gs)}catch(e){firstErr=firstErr||e.message}}
-   if(vm=='gem'){setSt('Membuat suara '+(i+1)+'/'+scenes.length+'…',pc+4);try{sc.buf=await genVoice(sc.text);sc.dur=Math.max(2.5,sc.buf.duration+.7)}catch(e){firstErr=firstErr||e.message}}
+   if(useAI&&!scenes.imgDead){setSt('Membuat gambar '+(i+1)+'/'+scenes.length+'…',pc);try{sc.img=await genImage(sc.prompt,gs)}catch(e){firstErr=firstErr||e.message;if(/quota|not found|permission|API key|billing/i.test(e.message))scenes.imgDead=true}}
+   if(vm=='gem'&&!scenes.voiceDead){setSt('Membuat suara '+(i+1)+'/'+scenes.length+'…',pc+4);try{sc.buf=await genVoice(sc.text);sc.dur=Math.max(2.5,sc.buf.duration+.7)}catch(e){firstErr=firstErr||e.message;if(/quota|not found|permission|API key|billing/i.test(e.message))scenes.voiceDead=true}}
   }
   var acc=0;scenes.forEach(function(s){s.start=acc;acc+=s.dur});total=acc;
   record(vm);
@@ -217,6 +218,18 @@ function record(vm){
   $('st').textContent='Merekam adegan '+(i+1)+'/'+scenes.length+'… '+Math.max(0,Math.ceil(total-t))+' dtk lagi';
   requestAnimationFrame(loop);})();
 }
+$('lm').onclick=async function(){
+ var k=$('key').value.trim(),box=$('ml');if(!k){box.textContent='Isi API key dulu.';return;}
+ box.textContent='Mengambil daftar model…';
+ try{var r=await fetch('https://generativelanguage.googleapis.com/v1beta/models?pageSize=200',{headers:{'x-goog-api-key':k}});var j=await r.json();
+  if(!r.ok)throw new Error((j.error&&j.error.message)||('HTTP '+r.status));
+  var ms=(j.models||[]).filter(function(m){return(m.supportedGenerationMethods||[]).indexOf('generateContent')>-1}).map(function(m){return m.name.replace('models/','')});
+  box.innerHTML='Tekan nama model untuk memakainya (otomatis masuk kolom gambar/suara/naskah sesuai namanya). Daftar ini hanya menunjukkan model ada, bukan apakah gratis.<br>';
+  ms.filter(function(n){return /image|tts|flash/i.test(n)}).forEach(function(n){var b=document.createElement('button');b.type='button';b.className='alt';b.style.cssText='padding:8px;font-size:13px;margin-top:4px';b.textContent=n;
+   b.onclick=function(){var t=/image/i.test(n)?'mi':/tts/i.test(n)?'mt':'mx';$(t).value=n;saveCfg();b.textContent=n+' ✓ dipakai';};box.appendChild(b);});
+  if(!box.querySelector('button'))box.textContent='Tidak ada model yang cocok di daftar.';
+ }catch(e){box.textContent='Gagal: '+e.message;}
+};
 $('go').onclick=start;
 $('sh').onclick=function(){if(!lastBlob)return;try{var f=new File([lastBlob],'tuyul-ai.'+lastExt,{type:lastBlob.type});
  if(navigator.canShare&&navigator.canShare({files:[f]}))navigator.share({files:[f],title:'TUYUL AI'}).catch(function(){});else $('info').textContent='Menu bagikan tidak tersedia. Pakai titik tiga di pemutar → Download.';}catch(e){}};
