@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>TUYUL AI – Generator Video Otomatis</title>
+<style>
+:root{--bg:#f6f5f1;--card:#fff;--tx:#1b1b1f;--mu:#6b6b76;--ac:#e8590c;--bd:#dcdad2}
+@media (prefers-color-scheme:dark){:root{--bg:#121317;--card:#1c1e24;--tx:#f1f1f4;--mu:#9a9aa6;--ac:#ff8a3d;--bd:#2d3039}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:480px;margin:0 auto;padding:18px 16px 40px}
+h1{font-size:22px;margin:0 0 2px}.sub{color:var(--mu);font-size:13px;margin:0 0 14px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:14px;margin-bottom:12px}
+label{display:block;font-size:13px;color:var(--mu);margin:10px 0 4px}
+.card>label:first-child,summary+label{margin-top:0}
+input[type=text],input[type=password],textarea,select{width:100%;padding:11px;border-radius:10px;border:1px solid var(--bd);background:var(--bg);color:var(--tx);font:inherit}
+textarea{min-height:80px}
+.row{display:flex;gap:8px}.row>*{flex:1}
+.chk{display:flex;gap:8px;align-items:center;font-size:14px;margin-top:10px}.chk label{margin:0;color:inherit;font-size:14px}
+summary{font-weight:600;cursor:pointer}
+button{width:100%;padding:14px;border:0;border-radius:12px;background:var(--ac);color:#fff;font:700 16px inherit}
+button:disabled{opacity:.5}button.alt{background:var(--card);color:var(--tx);border:1px solid var(--bd);margin-top:8px}
+.bar{height:8px;background:var(--bd);border-radius:6px;overflow:hidden;margin-top:10px}.bar i{display:block;height:100%;width:0;background:var(--ac)}
+#st{font-size:14px;color:var(--mu);margin-top:8px;word-break:break-word}
+canvas,video{width:100%;max-width:300px;display:block;margin:0 auto;border-radius:12px;background:#000;aspect-ratio:9/16}
+.note{font-size:12.5px;color:var(--mu);margin-top:8px}.hide{display:none}
+a.dl{display:block;text-align:center;margin-top:10px;padding:12px;border-radius:12px;border:1px solid var(--ac);color:var(--ac);text-decoration:none;font-weight:600}
+</style>
+</head>
+<body>
+<main>
+<h1>🎬 TUYUL AI</h1>
+<p class="sub">Generator video pendek otomatis. API key kamu disimpan di browser HP ini saja.</p>
+
+<details class="card" id="cfg" open>
+<summary>⚙️ Pengaturan API (Google Gemini)</summary>
+<label for="key">API key</label>
+<input type="password" id="key" placeholder="AIza..." autocomplete="off">
+<div class="chk"><input type="checkbox" id="show"><label for="show">Tampilkan key</label></div>
+<div class="chk"><input type="checkbox" id="rem" checked><label for="rem">Ingat key di HP ini</label></div>
+<label for="mx">Model naskah</label><input type="text" id="mx" value="gemini-3.1-flash-lite">
+<label for="mi">Model gambar</label><input type="text" id="mi" value="gemini-2.5-flash-image">
+<label for="mt">Model suara (TTS)</label><input type="text" id="mt" value="gemini-3.1-flash-tts-preview">
+<p class="note">Nama model sering berganti dan tidak semua gratis. Kalau muncul error “model not found”, ganti namanya di sini (lihat daftar di Google AI Studio).</p>
+</details>
+
+<div class="card">
+<label for="title">Judul video</label>
+<input type="text" id="title" value="Kenapa laut terdalam menyimpan misteri?">
+<div class="chk"><input type="checkbox" id="ut" checked><label for="ut">Naskah otomatis dari Gemini</label></div>
+<label for="script">Atau tulis naskah sendiri (1 kalimat per baris; mengalahkan opsi di atas)</label>
+<textarea id="script"></textarea>
+<div class="row">
+<div><label for="dur">Durasi</label><select id="dur"><option value="15">15 dtk</option><option value="30" selected>30 dtk</option><option value="60">60 dtk</option></select></div>
+<div><label for="vm">Suara</label><select id="vm"><option value="gem">Gemini (masuk file)</option><option value="phone">Suara HP (tidak masuk file)</option><option value="none">Tanpa suara</option></select></div>
+</div>
+<label for="gs">Gaya gambar</label>
+<select id="gs">
+<option value="stick">Stickman lokal (tanpa API, gratis)</option>
+<option value="cinematic dark moody photorealistic, dramatic lighting">Sinematik gelap (AI)</option>
+<option value="documentary photography, natural light, realistic">Dokumenter realistis (AI)</option>
+<option value="colorful flat cartoon illustration, clean shapes">Kartun ilustrasi (AI)</option>
+<option value="anime style illustration, vibrant, detailed background">Anime (AI)</option>
+</select>
+<label for="vc">Karakter suara Gemini</label>
+<select id="vc"><option>Kore</option><option>Puck</option><option>Charon</option><option>Aoede</option><option>Fenrir</option></select>
+<div class="chk"><input type="checkbox" id="mus" checked><label for="mus">Musik latar sederhana</label></div>
+<button id="go" style="margin-top:14px">GENERATE VIDEO</button>
+<div class="bar"><i id="pb"></i></div>
+<div id="st">Siap. Jangan pindah tab/aplikasi saat proses berjalan.</div>
+</div>
+
+<div class="card"><canvas id="cv" width="540" height="960"></canvas></div>
+
+<div class="card hide" id="out">
+<video id="vd" controls playsinline></video>
+<a class="dl" id="dl" download="tuyul-ai.webm">⬇ Simpan video</a>
+<button class="alt" id="sh">Bagikan / Simpan lewat menu HP</button>
+<p class="note" id="info"></p>
+</div>
+</main>
+
+<script>
+(function(){
+var W=540,H=960,cv=document.getElementById('cv'),cx=cv.getContext('2d');
+var $=function(i){return document.getElementById(i)};
+var ACC=['#ff6b6b','#feca57','#48dbfb','#1dd1a1','#ff9ff3','#54a0ff'];
+var POSES=['wave','think','walk','point','shock','think','walk','point'];
+var POOL=['Pernah penasaran soal ini?','Banyak orang bertanya hal yang sama.','Mari kita lihat pelan-pelan.','Ternyata jawabannya menarik.','Masih banyak hal yang belum kita tahu.','Dan itu yang bikin makin seru.','Menurut kamu bagaimana?','Tulis pendapatmu di komentar!','Follow untuk fakta berikutnya.'];
+var scenes=[],total=10,actx,adest,running=false,lastBlob=null,lastExt='webm',firstErr='';
+var SAVE=['key','mx','mi','mt','vc'];
+function ls(f){try{return f()}catch(e){}}
+ls(function(){SAVE.forEach(function(k){var v=localStorage.getItem('tuyul_'+k);if(v)$(k).value=v})});
+$('show').onchange=function(){$('key').type=this.checked?'text':'password'};
+function saveCfg(){ls(function(){SAVE.forEach(function(k){if(k=='key'&&!$('rem').checked)localStorage.removeItem('tuyul_key');else localStorage.setItem('tuyul_'+k,$(k).value.trim())})})}
+
+function limb(x,y,a1,l1,a2,l2){var x1=x+l1*Math.sin(a1),y1=y+l1*Math.cos(a1);cx.beginPath();cx.moveTo(x,y);cx.lineTo(x1,y1);cx.lineTo(x1+l2*Math.sin(a2),y1+l2*Math.cos(a2));cx.stroke();}
+function pose(n,t){var P={la:[-.2,-.1],ra:[.2,.1],ll:[.12,.1],rl:[-.12,-.1],dy:Math.sin(t*3)*3,ex:''},s;
+ if(n=='walk'){s=Math.sin(t*7);P.ll=[s*.6,s*.6+Math.max(0,-s)*.6];P.rl=[-s*.6,-s*.6+Math.max(0,s)*.6];P.la=[-s*.5,-s*.5+.3];P.ra=[s*.5,s*.5+.3];P.dy=-Math.abs(Math.cos(t*7))*6;}
+ else if(n=='wave')P.ra=[2.5+Math.sin(t*9)*.25,2.9+Math.sin(t*9)*.5];
+ else if(n=='think'){P.ra=[.9,3.6];P.ex='?';}
+ else if(n=='point')P.ra=[1.57,1.57];
+ else if(n=='shock'){P.la=[-2.6+Math.sin(t*8)*.15,-2.9];P.ra=[2.6-Math.sin(t*8)*.15,2.9];P.dy=-Math.abs(Math.sin(t*6))*30;P.ex='!';}
+ return P;}
+function stick(n,t,ac){var P=pose(n,t);cx.save();cx.translate(W/2,560+P.dy);cx.scale(1.5,1.5);
+ cx.strokeStyle=cx.fillStyle='#f4f4f4';cx.lineWidth=7;cx.lineCap=cx.lineJoin='round';
+ cx.beginPath();cx.moveTo(0,-90);cx.lineTo(0,0);cx.stroke();
+ limb(0,0,P.ll[0],55,P.ll[1],55);limb(0,0,P.rl[0],55,P.rl[1],55);limb(0,-80,P.la[0],42,P.la[1],42);limb(0,-80,P.ra[0],42,P.ra[1],42);
+ cx.beginPath();cx.arc(0,-122,28,0,7);cx.stroke();
+ cx.beginPath();cx.arc(-9,-128,3.2,0,7);cx.arc(9,-128,3.2,0,7);cx.fill();
+ cx.lineWidth=3;cx.beginPath();if(n=='shock')cx.arc(0,-110,5,0,7);else cx.arc(0,-114,8,.15*Math.PI,.85*Math.PI);cx.stroke();
+ if(P.ex){cx.fillStyle=ac;cx.font='bold 64px sans-serif';cx.textAlign='center';cx.fillText(P.ex,58+Math.sin(t*4)*4,-150);}
+ cx.restore();}
+function wrap(txt,mw){var w=txt.split(' '),l=[],c='';w.forEach(function(x){var tt=c?c+' '+x:x;if(cx.measureText(tt).width>mw&&c){l.push(c);c=x}else c=tt});if(c)l.push(c);return l;}
+function rr(x,y,w,h,r){cx.beginPath();cx.moveTo(x+r,y);cx.arcTo(x+w,y,x+w,y+h,r);cx.arcTo(x+w,y+h,x,y+h,r);cx.arcTo(x,y+h,x,y,r);cx.arcTo(x,y,x+w,y,r);cx.closePath();}
+function frame(t){
+ var i=scenes.length-1;for(var k=0;k<scenes.length;k++)if(t<scenes[k].start+scenes[k].dur){i=k;break;}
+ var sc=scenes[i],lt=Math.max(0,t-sc.start),p=Math.min(1,lt/sc.dur),ac=ACC[i%ACC.length];
+ var g=cx.createLinearGradient(0,0,0,H);g.addColorStop(0,'#0b1530');g.addColorStop(1,'#142a52');cx.fillStyle=g;cx.fillRect(0,0,W,H);
+ cx.save();
+ if(sc.img){var iw=sc.img.width,ih=sc.img.height,s=Math.max(W/iw,H/ih)*(1+.12*p),dw=iw*s,dh=ih*s;
+  cx.drawImage(sc.img,(W-dw)/2+(i%2?1:-1)*14*p,(H-dh)/2,dw,dh);
+  var gg=cx.createLinearGradient(0,560,0,H);gg.addColorStop(0,'rgba(0,0,0,0)');gg.addColorStop(1,'rgba(0,0,0,.75)');cx.fillStyle=gg;cx.fillRect(0,560,W,H-560);
+ }else{
+  cx.translate(W/2,H/2);cx.scale(1+.07*p,1+.07*p);cx.translate(-W/2,-H/2);
+  cx.globalAlpha=.25;cx.fillStyle=ac;cx.beginPath();cx.arc(90+i*40%300,200+Math.sin(t)*14,90,0,7);cx.fill();cx.beginPath();cx.arc(460,380+Math.cos(t*.8)*14,55,0,7);cx.fill();
+  var pn=POSES[i%POSES.length];cx.strokeStyle='#f4f4f4';cx.globalAlpha=.5;cx.lineWidth=4;cx.beginPath();cx.moveTo(0,700);cx.lineTo(W,700);cx.stroke();
+  if(pn=='walk'){cx.lineWidth=3;for(var q=0;q<8;q++){var gx=((q*90-t*160)%720+720)%720-90;cx.beginPath();cx.moveTo(gx,722);cx.lineTo(gx+36,722);cx.stroke();}}
+  cx.globalAlpha=Math.min(1,lt/.35);stick(pn,t,ac);
+ }
+ cx.restore();cx.globalAlpha=Math.min(1,lt/.3);
+ cx.font='bold 34px sans-serif';cx.textAlign='center';
+ var L=wrap(sc.text,440),bh=L.length*44+34,by=900-bh;
+ cx.fillStyle='rgba(0,0,0,.55)';rr(40,by,460,bh,22);cx.fill();
+ cx.fillStyle='#fff';L.forEach(function(l,j){cx.fillText(l,W/2,by+46+j*44)});
+ cx.globalAlpha=1;cx.fillStyle=ac;cx.fillRect(0,0,W*Math.min(1,t/total),8);
+ cx.font='bold 20px sans-serif';cx.textAlign='left';cx.fillStyle='#fff';cx.globalAlpha=.6;cx.fillText('TUYUL AI',22,44);cx.globalAlpha=1;}
+
+function sleep(ms){return new Promise(function(r){setTimeout(r,ms)})}
+async function gem(model,body){
+ for(var n=0;n<4;n++){
+  var r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(model)+':generateContent',{method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':$('key').value.trim()},body:JSON.stringify(body)});
+  var j={};try{j=await r.json()}catch(e){}
+  if(r.ok)return j;
+  var msg=(j.error&&j.error.message)||('HTTP '+r.status);
+  if((r.status==429||r.status==503)&&n<3){setSt('Kena batas kuota/sibuk, menunggu 15 detik lalu coba lagi…');await sleep(15000);continue;}
+  throw new Error(model+': '+msg.slice(0,160));
+ }}
+function parts(j){return(j.candidates&&j.candidates[0]&&j.candidates[0].content&&j.candidates[0].content.parts)||[];}
+function setSt(s,p){$('st').textContent=s;if(p!=null)$('pb').style.width=p+'%';}
+function loadImg(src){return new Promise(function(res,rej){var im=new Image();im.onload=function(){res(im)};im.onerror=function(){rej(new Error('Gambar rusak'))};im.src=src;});}
+async function genScript(title,n,gs){
+ var style=gs=='stick'?'simple':gs;
+ var p='Buat naskah video pendek vertikal berbahasa Indonesia tentang: "'+title+'". Tepat '+n+' adegan. Tiap adegan punya "narration" (1-2 kalimat pendek, santai, menarik; adegan pertama berupa hook; adegan terakhir berupa ajakan) dan "image_prompt" (deskripsi visual detail dalam bahasa Inggris, tanpa teks/tulisan di gambar, gaya: '+style+'). Balas JSON saja dengan format {"scenes":[{"narration":"","image_prompt":""}]}';
+ var j=await gem($('mx').value.trim(),{contents:[{parts:[{text:p}]}],generationConfig:{responseMimeType:'application/json'}});
+ var t=parts(j).map(function(x){return x.text||''}).join('').replace(/```json|```/g,'').trim();
+ var o=JSON.parse(t);if(!o.scenes||!o.scenes.length)throw new Error('Naskah kosong');return o.scenes;}
+async function genImage(prompt,gs){
+ var j=await gem($('mi').value.trim(),{contents:[{parts:[{text:prompt+'. Style: '+gs+'. Vertical 9:16 composition, no text, no watermark.'}]}],generationConfig:{responseModalities:['TEXT','IMAGE']}});
+ var ps=parts(j);for(var i=0;i<ps.length;i++){var d=ps[i].inlineData||ps[i].inline_data;if(d&&d.data)return loadImg('data:'+(d.mimeType||d.mime_type||'image/png')+';base64,'+d.data);}
+ throw new Error('Respons tidak berisi gambar');}
+async function genVoice(txt){
+ var j=await gem($('mt').value.trim(),{contents:[{parts:[{text:txt}]}],generationConfig:{responseModalities:['AUDIO'],speechConfig:{voiceConfig:{prebuiltVoiceConfig:{voiceName:$('vc').value}}}}});
+ var ps=parts(j),d=null;for(var i=0;i<ps.length;i++){var x=ps[i].inlineData||ps[i].inline_data;if(x&&x.data){d=x;break;}}
+ if(!d)throw new Error('Respons tidak berisi suara');
+ var m=/rate=(\d+)/.exec(d.mimeType||d.mime_type||''),rate=m?+m[1]:24000;
+ var bin=atob(d.data),n=bin.length>>1,buf=actx.createBuffer(1,n,rate),ch=buf.getChannelData(0);
+ for(var k=0;k<n;k++){var v=bin.charCodeAt(2*k)|(bin.charCodeAt(2*k+1)<<8);if(v>32767)v-=65536;ch[k]=v/32768;}
+ return buf;}
+
+function chord(i,dur){if(!actx||!$('mus').checked)return;var base=[220,261.6,293.7,329.6,392][i%5],now=actx.currentTime;
+ [1,1.5,2].forEach(function(m){var o=actx.createOscillator(),g=actx.createGain();o.type='triangle';o.frequency.value=base*m;
+  g.gain.setValueAtTime(0,now);g.gain.linearRampToValueAtTime(.035,now+.4);g.gain.linearRampToValueAtTime(0,now+dur+.3);o.connect(g);g.connect(adest);o.start(now);o.stop(now+dur+.4);});}
+function playVoice(buf){var s=actx.createBufferSource();s.buffer=buf;s.connect(adest);s.connect(actx.destination);s.start();}
+function phoneSpeak(t){try{speechSynthesis.cancel();var u=new SpeechSynthesisUtterance(t);u.lang='id-ID';u.rate=1.05;speechSynthesis.speak(u);}catch(e){}}
+function pickMime(){var L=['video/mp4;codecs=avc1.42E01E,mp4a.40.2','video/mp4','video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm'];try{for(var i=0;i<L.length;i++)if(MediaRecorder.isTypeSupported(L[i]))return L[i];}catch(e){}return '';}
+
+async function start(){
+ if(running)return;
+ if(!window.MediaRecorder||!cv.captureStream){setSt('Browser belum mendukung perekaman video. Coba Chrome terbaru.');return;}
+ var gs=$('gs').value,useAI=gs!='stick',useT=$('ut').checked&&!$('script').value.trim(),vm=$('vm').value,title=$('title').value.trim()||'Judul video',d=+$('dur').value;
+ if((useAI||useT||vm=='gem')&&!$('key').value.trim()){setSt('Isi API key dulu di Pengaturan API, atau pilih stickman lokal + tanpa naskah/suara Gemini.');$('cfg').open=true;return;}
+ saveCfg();running=true;firstErr='';$('go').disabled=true;$('out').classList.add('hide');
+ var AC=window.AudioContext||window.webkitAudioContext;actx=new AC();adest=actx.createMediaStreamDestination();actx.resume();
+ try{
+  var raw=$('script').value.split('\n').map(function(x){return x.trim()}).filter(Boolean),n=Math.max(3,Math.round(d/5)),L;
+  if(raw.length)L=raw.map(function(x){return{narration:x,image_prompt:x+', '+title}});
+  else if(useT){setSt('Menulis naskah dengan Gemini…',3);try{L=await genScript(title,n,gs)}catch(e){firstErr=e.message;L=null}}
+  if(!L){var base=[title].concat(POOL.slice(0,Math.min(n-2,POOL.length-1)),[POOL[POOL.length-1]]);L=base.map(function(x){return{narration:x,image_prompt:x+', '+title}});}
+  scenes=L.map(function(x){return{text:x.narration,prompt:x.image_prompt||x.narration,img:null,buf:null,dur:Math.min(8,Math.max(2.5,d/L.length)),start:0}});
+  for(var i=0;i<scenes.length;i++){
+   var sc=scenes[i],pc=5+85*i/scenes.length;
+   if(useAI){setSt('Membuat gambar '+(i+1)+'/'+scenes.length+'…',pc);try{sc.img=await genImage(sc.prompt,gs)}catch(e){firstErr=firstErr||e.message}}
+   if(vm=='gem'){setSt('Membuat suara '+(i+1)+'/'+scenes.length+'…',pc+4);try{sc.buf=await genVoice(sc.text);sc.dur=Math.max(2.5,sc.buf.duration+.7)}catch(e){firstErr=firstErr||e.message}}
+  }
+  var acc=0;scenes.forEach(function(s){s.start=acc;acc+=s.dur});total=acc;
+  record(vm);
+ }catch(e){setSt('Gagal: '+e.message);running=false;$('go').disabled=false;try{actx.close()}catch(x){}}
+}
+function record(vm){
+ var stream=cv.captureStream(30);adest.stream.getAudioTracks().forEach(function(t){stream.addTrack(t)});
+ var mime=pickMime(),rec;try{rec=new MediaRecorder(stream,mime?{mimeType:mime,videoBitsPerSecond:2500000}:{});}catch(e){rec=new MediaRecorder(stream);}
+ var ch=[];rec.ondataavailable=function(e){if(e.data&&e.data.size)ch.push(e.data)};
+ rec.onstop=function(){
+  var type=rec.mimeType||mime||'video/webm';lastExt=type.indexOf('mp4')>-1?'mp4':'webm';lastBlob=new Blob(ch,{type:type});
+  var url=URL.createObjectURL(lastBlob);$('vd').src=url;$('dl').href=url;$('dl').download='tuyul-ai.'+lastExt;
+  $('info').textContent='Selesai: '+(lastBlob.size/1048576).toFixed(1)+' MB, '+lastExt.toUpperCase()+', 540×960.'+(firstErr?' Ada bagian yang dilewati/diganti stickman. Error pertama: '+firstErr:'')+' Kalau tombol simpan tidak jalan, pakai titik tiga di pemutar → Download.';
+  $('out').classList.remove('hide');setSt('Video selesai ✅',100);$('go').disabled=false;running=false;try{actx.close()}catch(e){}try{speechSynthesis.cancel()}catch(e){}
+  $('out').scrollIntoView({behavior:'smooth'});};
+ var last=-1,t0=performance.now();rec.start(500);
+ (function loop(){
+  var t=(performance.now()-t0)/1000;if(t>=total+.4){rec.stop();return;}
+  var tt=Math.min(t,total-.001),i=0;for(var k=0;k<scenes.length;k++)if(tt<scenes[k].start+scenes[k].dur){i=k;break;}
+  if(i!==last){last=i;chord(i,scenes[i].dur);if(scenes[i].buf)playVoice(scenes[i].buf);else if(vm=='phone')phoneSpeak(scenes[i].text);}
+  frame(tt);$('pb').style.width=Math.min(99,t/total*100)+'%';
+  $('st').textContent='Merekam adegan '+(i+1)+'/'+scenes.length+'… '+Math.max(0,Math.ceil(total-t))+' dtk lagi';
+  requestAnimationFrame(loop);})();
+}
+$('go').onclick=start;
+$('sh').onclick=function(){if(!lastBlob)return;try{var f=new File([lastBlob],'tuyul-ai.'+lastExt,{type:lastBlob.type});
+ if(navigator.canShare&&navigator.canShare({files:[f]}))navigator.share({files:[f],title:'TUYUL AI'}).catch(function(){});else $('info').textContent='Menu bagikan tidak tersedia. Pakai titik tiga di pemutar → Download.';}catch(e){}};
+scenes=[{text:'Judul video kamu muncul di sini',start:0,dur:5}];frame(.5);
+})();
+</script>
+</body>
+</html>
