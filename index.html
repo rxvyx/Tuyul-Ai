@@ -56,6 +56,9 @@ a.dl{display:block;text-align:center;margin-top:10px;padding:12px;border-radius:
 <div><label for="dur">Durasi</label><select id="dur"><option value="15">15 dtk</option><option value="30" selected>30 dtk</option><option value="60">60 dtk</option></select></div>
 <div><label for="vm">Suara</label><select id="vm"><option value="gem">Gemini (masuk file)</option><option value="phone">Suara HP (tidak masuk file)</option><option value="none">Tanpa suara</option></select></div>
 </div>
+<label for="isrc">Sumber gambar AI</label>
+<select id="isrc"><option value="poll">Pollinations (gratis, tanpa key)</option><option value="gem">Gemini (pakai API key)</option></select>
+<p class="note">Pollinations gratis tapi antre ±16 detik per gambar, jadi video 30 dtk butuh ±2 menit. Hanya dipakai kalau gaya gambar bukan stickman.</p>
 <label for="gs">Gaya gambar</label>
 <select id="gs">
 <option value="stick">Stickman lokal (tanpa API, gratis)</option>
@@ -90,7 +93,7 @@ var ACC=['#ff6b6b','#feca57','#48dbfb','#1dd1a1','#ff9ff3','#54a0ff'];
 var POSES=['wave','think','walk','point','shock','think','walk','point'];
 var POOL=['Pernah penasaran soal ini?','Banyak orang bertanya hal yang sama.','Mari kita lihat pelan-pelan.','Ternyata jawabannya menarik.','Masih banyak hal yang belum kita tahu.','Dan itu yang bikin makin seru.','Menurut kamu bagaimana?','Tulis pendapatmu di komentar!','Follow untuk fakta berikutnya.'];
 var scenes=[],total=10,actx,adest,running=false,lastBlob=null,lastExt='webm',firstErr='';
-var SAVE=['key','mx','mi','mt','vc'];
+var SAVE=['key','mx','mi','mt','vc','isrc'];
 function ls(f){try{return f()}catch(e){}}
 ls(function(){SAVE.forEach(function(k){var v=localStorage.getItem('tuyul_'+k);if(v)$(k).value=v})});
 $('show').onchange=function(){$('key').type=this.checked?'text':'password'};
@@ -157,6 +160,21 @@ async function genScript(title,n,gs){
  var j=await gem($('mx').value.trim(),{contents:[{parts:[{text:p}]}],generationConfig:{responseMimeType:'application/json'}});
  var t=parts(j).map(function(x){return x.text||''}).join('').replace(/```json|```/g,'').trim();
  var o=JSON.parse(t);if(!o.scenes||!o.scenes.length)throw new Error('Naskah kosong');return o.scenes;}
+var lastPoll=0;
+async function genImagePoll(prompt,gs,no,tot){
+ var q=(prompt+'. '+gs+', vertical 9:16 composition, no text, no watermark').slice(0,600);
+ for(var n=0;n<3;n++){
+  var wait=16000-(Date.now()-lastPoll);
+  if(wait>0){for(var w=Math.ceil(wait/1000);w>0;w--){setSt('Pollinations: gambar '+no+'/'+tot+', antre '+w+' dtk…');await sleep(1000);}}
+  lastPoll=Date.now();setSt('Pollinations: membuat gambar '+no+'/'+tot+'…');
+  var url='https://image.pollinations.ai/prompt/'+encodeURIComponent(q)+'?width=540&height=960&nologo=true&model=flux&seed='+Math.floor(Math.random()*1e6);
+  var r;try{r=await fetch(url)}catch(e){throw new Error('Pollinations: gagal terhubung/diblokir ('+e.message+')')}
+  if(r.status==429||r.status>=500){if(n<2)continue;throw new Error('Pollinations: HTTP '+r.status)}
+  if(!r.ok)throw new Error('Pollinations: HTTP '+r.status);
+  var b=await r.blob();
+  if(!/^image\//.test(b.type))throw new Error('Pollinations: respons bukan gambar');
+  return loadImg(URL.createObjectURL(b));
+ }}
 async function genImage(prompt,gs){
  var j=await gem($('mi').value.trim(),{contents:[{parts:[{text:prompt+'. Style: '+gs+'. Vertical 9:16 composition, no text, no watermark.'}]}],generationConfig:{responseModalities:['TEXT','IMAGE']}});
  var ps=parts(j);for(var i=0;i<ps.length;i++){var d=ps[i].inlineData||ps[i].inline_data;if(d&&d.data)return loadImg('data:'+(d.mimeType||d.mime_type||'image/png')+';base64,'+d.data);}
@@ -180,8 +198,8 @@ function pickMime(){var L=['video/mp4;codecs=avc1.42E01E,mp4a.40.2','video/mp4',
 async function start(){
  if(running)return;
  if(!window.MediaRecorder||!cv.captureStream){setSt('Browser belum mendukung perekaman video. Coba Chrome terbaru.');return;}
- var gs=$('gs').value,useAI=gs!='stick',useT=$('ut').checked&&!$('script').value.trim(),vm=$('vm').value,title=$('title').value.trim()||'Judul video',d=+$('dur').value;
- if((useAI||useT||vm=='gem')&&!$('key').value.trim()){setSt('Isi API key dulu di Pengaturan API, atau pilih stickman lokal + tanpa naskah/suara Gemini.');$('cfg').open=true;return;}
+ var gs=$('gs').value,src=$('isrc').value,pf=0,useAI=gs!='stick',useT=$('ut').checked&&!$('script').value.trim(),vm=$('vm').value,title=$('title').value.trim()||'Judul video',d=+$('dur').value;
+ if(((useAI&&src=='gem')||useT||vm=='gem')&&!$('key').value.trim()){setSt('Isi API key dulu di Pengaturan API, atau pilih stickman lokal + tanpa naskah/suara Gemini.');$('cfg').open=true;return;}
  saveCfg();running=true;firstErr='';$('go').disabled=true;$('out').classList.add('hide');
  var AC=window.AudioContext||window.webkitAudioContext;actx=new AC();adest=actx.createMediaStreamDestination();actx.resume();
  try{
@@ -192,7 +210,7 @@ async function start(){
   scenes=L.map(function(x){return{text:x.narration,prompt:x.image_prompt||x.narration,img:null,buf:null,dur:Math.min(8,Math.max(2.5,d/L.length)),start:0}});
   for(var i=0;i<scenes.length;i++){
    var sc=scenes[i],pc=5+85*i/scenes.length;
-   if(useAI&&!scenes.imgDead){setSt('Membuat gambar '+(i+1)+'/'+scenes.length+'…',pc);try{sc.img=await genImage(sc.prompt,gs)}catch(e){firstErr=firstErr||e.message;if(/quota|not found|permission|API key|billing/i.test(e.message))scenes.imgDead=true}}
+   if(useAI&&!scenes.imgDead){setSt('Membuat gambar '+(i+1)+'/'+scenes.length+'…',pc);try{sc.img=await(src=='poll'?genImagePoll(sc.prompt,gs,i+1,scenes.length):genImage(sc.prompt,gs))}catch(e){firstErr=firstErr||e.message;if(src=='poll'){if(++pf>=2)scenes.imgDead=true}else if(/quota|not found|permission|API key|billing/i.test(e.message))scenes.imgDead=true}}
    if(vm=='gem'&&!scenes.voiceDead){setSt('Membuat suara '+(i+1)+'/'+scenes.length+'…',pc+4);try{sc.buf=await genVoice(sc.text);sc.dur=Math.max(2.5,sc.buf.duration+.7)}catch(e){firstErr=firstErr||e.message;if(/quota|not found|permission|API key|billing/i.test(e.message))scenes.voiceDead=true}}
   }
   var acc=0;scenes.forEach(function(s){s.start=acc;acc+=s.dur});total=acc;
